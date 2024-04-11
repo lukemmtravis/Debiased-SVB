@@ -16,6 +16,25 @@ source('lasso_inference.r')
 
 #### Data Generation Functions ####
 
+make_Sigma = function(p, rho, block_size=NA){
+	if(is.na(block_size)){
+      block_size = p
+    }
+  if(p %% block_size != 0){
+      stop('Block size does not divide p')
+    }
+  B = matrix(rho, nrow = block_size, ncol = block_size)
+  diag(B) = rep(1,block_size)
+    
+  Sigma = matrix(0, nrow = p, ncol = p)
+  for(block_num in 1:(p/block_size) ){
+    start_ix = (block_num - 1)*block_size + 1
+    end_ix = block_num*block_size
+    Sigma[start_ix:end_ix, start_ix:end_ix] = B
+  }
+  return(Sigma)
+}
+
 sample_block_correlated_inputs = function(n, p, rho, block_size=NA){
     if(is.na(block_size)){
       block_size = p
@@ -134,8 +153,8 @@ isvb.fit = function(X, Y, n_samples = 1000, lambda = NA, k = 1){
 	if(k == 1){
 		# Treat k == 1 case separately because here we will use quantiles for cred interval
 		X1 = X[,1]
-	    X1_norm_sq = sum(X1 * X1)
-	    H = X1 %*% t(X1) / X1_norm_sq
+    X1_norm_sq = sum(X1 * X1)
+    H = X1 %*% t(X1) / X1_norm_sq
 		#and the projection matrix onto span(X1)^perp
 		I_minus_H = diag(rep(1,n)) - H
 
@@ -569,32 +588,6 @@ zz.fit = function(X, Y, k = 1){
     			fit_time=as.numeric(difftime(t_2, t_1, units = 'secs'))))
 }
 
-# jm.fit = function(X, Y, k = 1){
-# 	if(k == 1){
-# 		n = dim(X)[1]
-# 		p = dim(X)[2]
-# 		t_1 = Sys.time()
-# 		jm_fit = SSLassoFirstCoord(X, Y)
-# 		beta_hat = jm_fit$unb.coef
-# 		CI = c(jm_fit$low.lim, jm_fit$up.lim)
-# 		t_2 = Sys.time()
-# 		return(list(beta_hat=beta_hat,
-# 					CI=CI,
-# 					fit_time=as.numeric(difftime(t_2, t_1, units = 'secs'))))	
-# 	}else{
-# 		n = dim(X)[1]
-# 		p = dim(X)[2]
-# 		t_1 = Sys.time()
-# 		jm_fit = SSLassok(X, Y, k)
-# 		beta_hat = jm_fit$beta_hat
-# 		cov_hat = jm_fit$cov_hat
-# 		t_2 = Sys.time()
-# 		return(list(beta_hat=beta_hat,
-# 					cov_hat=cov_hat,
-# 					fit_time=as.numeric(difftime(t_2, t_1, units = 'secs'))))	
-# 	}
-# }
-
 jm.fit = function(X, Y, k = 1){
 	# Fit JM method using their code. Note, also returns a vector add_length which quantifies 
 	# additional uncertainty about the centering.
@@ -621,6 +614,48 @@ jm.fit = function(X, Y, k = 1){
 		return(list(beta_hat=beta_hat,
 					cov_hat=cov_hat,
 					add_length=addlength,
+					fit_time=as.numeric(difftime(t_2, t_1, units = 'secs'))))	
+	}
+}
+
+jm18.fit = function(X, Y, Sigma, k = 1){
+	# Fit JM method using their code. Note, also returns a vector add_length which quantifies 
+	# additional uncertainty about the centering.
+	n = dim(X)[1]
+	p = dim(X)[2]
+	if(k == 1){
+		t_1 = Sys.time()
+    # gamma = 0.95
+    # cv_fit = cv.glmnet(X, Y)
+    # beta_lasso = glmnet(X, Y,lambda =cv_fit$lambda.min)$beta
+    # M = solve(Sigma, diag(rep(1, p)))
+    # beta_hat = (beta_lasso + (1/n)* M %*% t(X) %*% (Y - X%*%beta_lasso))[1]
+    # Sigma_hat = t(X)%*%X / n
+    # C = M %*% Sigma_hat  %*% M
+    # CI = c(beta_hat - qnorm((1+gamma)/2)*sqrt(C[1,1]/n),
+    #        beta_hat + qnorm((1+gamma)/2)*sqrt(C[1,1]/n))
+    jm18_fit = SSLassoKnownSigmaK(X, Y, Sigma, k)
+ 		CI = c(jm18_fit$low.lim, jm18_fit$up.lim)
+		t_2 = Sys.time()
+		return(list(beta_hat=jm18_fit$beta_hat,
+					CI=CI,
+					fit_time=as.numeric(difftime(t_2, t_1, units = 'secs'))))	
+	}else{
+		t_1 = Sys.time()
+    # gamma = 0.95
+    # cv_fit = cv.glmnet(X, Y)
+    # beta_lasso = glmnet(X, Y,lambda =cv_fit$lambda.min)$beta
+    # M = solve(Sigma, diag(rep(1, p)))
+    # beta_hat = (beta_lasso + (1/n)* M %*% t(X) %*% (Y - X%*%beta_lasso))[1:k]
+    # Sigma_hat = t(X)%*%X / n
+    # cov_hat = (M %*% Sigma_hat  %*% M/n)[1:k,1:k]
+    # # explore adding length later
+    # add_length = rep(0, k)
+    jm18_fit = SSLassoKnownSigmaK(X, Y, Sigma, k)
+		t_2 = Sys.time()
+		return(list(beta_hat=jm18_fit$beta_hat,
+					cov_hat=jm18_fit$cov_hat,
+					add_length=jm18_fit$add_length,
 					fit_time=as.numeric(difftime(t_2, t_1, units = 'secs'))))	
 	}
 }
@@ -681,21 +716,66 @@ jmo.fit = function(X, Y, Sigma, k = 1){
 	}
 }
 
-oracle.fit = function(X, Y, S0, k = 1){
+br23.fit = function(X, Y, k = 1){
+	n = dim(X)[1]
+	p = dim(X)[2]
+
 	t_1 = Sys.time()
-	X_S0 = X[,S0]
-	oracle_centering = (solve(t(X_S0) %*% X_S0) %*% t(X_S0) %*% Y)[1:k]
-	oracle_matrix = solve(t(X_S0) %*% X_S0)[1:k, 1:k]
-	t_2 = Sys.time()
-  return(list(beta_hat = oracle_centering, 
-  						cov_hat = oracle_matrix,
-  						fit_time=as.numeric(difftime(t_2, t_1, units = 'secs'))))
+	tau=1
+	gamma=0.95
+	if(k > 1){
+		stop('Only implemented for k = 1.')
+	}
+	Xv <- X[,1]
+  Xnotv <- X[, -1, drop = FALSE]
+  M <- Xnotv %*% t(Xnotv)
+  qOpt <- solve(diag(n) + M, Xv)
+  scale <- t(qOpt) %*% Xv
+  variance <- tau * (t(qOpt) %*% qOpt) / (t(qOpt) %*% Xv)^2
+  beta_hat <- t(qOpt) %*% Y / t(qOpt) %*% Xv
+
+  cv = qnorm((1+gamma)/2)
+  upperlimit <- beta_hat + cv * sqrt(variance)
+  lowerlimit <- beta_hat - cv * sqrt(variance)
+  CI = c(lowerlimit, upperlimit)
+
+  t_2 = Sys.time()
+
+  return(list(beta_hat=beta_hat,
+					CI=CI,
+					fit_time=as.numeric(difftime(t_2, t_1, units = 'secs'))))	
+}
+
+oracle.fit = function(X, Y, S0, k = 1){
+	if(k == 1){
+		gamma=0.95
+		t_1 = Sys.time()
+		X_S0 = X[,S0]
+		oracle_centering = (solve(t(X_S0) %*% X_S0) %*% t(X_S0) %*% Y)[1]
+		oracle_matrix = solve(t(X_S0) %*% X_S0)
+
+		CI = c(oracle_centering - qnorm((1+gamma)/2)*sqrt(oracle_matrix[1,1]),
+					 oracle_centering + qnorm((1+gamma)/2)*sqrt(oracle_matrix[1,1]))
+		t_2 = Sys.time()
+	  return(list(beta_hat = oracle_centering, 
+	  						CI = CI,
+	  						fit_time=as.numeric(difftime(t_2, t_1, units = 'secs'))))
+	}else{
+		t_1 = Sys.time()
+		X_S0 = X[,S0]
+		oracle_centering = (solve(t(X_S0) %*% X_S0) %*% t(X_S0) %*% Y)[1:k]
+		oracle_matrix = solve(t(X_S0) %*% X_S0)[1:k, 1:k]
+		t_2 = Sys.time()
+	  return(list(beta_hat = oracle_centering, 
+	  						cov_hat = oracle_matrix,
+	  						fit_time=as.numeric(difftime(t_2, t_1, units = 'secs'))))
+	}
 }
 
 oracle.fit.cond = function(X, Y, S0, k = 1){
-  	X_S0 = X[,S0]
-  	oracle_centering = (solve(t(X_S0) %*% X_S0) %*% t(X_S0) %*% Y)
-  	oracle_matrix = solve(t(X_S0) %*% X_S0)
+	X_S0 = X[,S0]
+	oracle_centering = (solve(t(X_S0) %*% X_S0) %*% t(X_S0) %*% Y)
+	oracle_matrix = solve(t(X_S0) %*% X_S0)
 
 	mu_k = oracle_centering[1:k]
 	mu_minus_k = oracle_centering[-c(1:k)]
@@ -707,7 +787,7 @@ oracle.fit.cond = function(X, Y, S0, k = 1){
 
 	cov_hat = M_k - M_k_minus_k %*% solve(M_minus_k) %*% t(M_k_minus_k)
 
-  	return(list(beta_hat = mu_k, cov_hat = cov_hat))
+	return(list(beta_hat = mu_k, cov_hat = cov_hat))
 }
 
 #### Compute and Evaluate Fits ####
@@ -873,19 +953,26 @@ sample_fits = function(n, p, s0, noise_var=1, noise='gaussian',
 		Y_scaled = Y
 	}
 	
-	S0 = which(beta_0!=0)
+	
+	# use anonymous functions to place 'oracle' quantities as necessary
 	if('oracle' %in% names(fits)){
+		S0 = which(beta_0!=0)
 		fits[['oracle']] = function(x, y, k) oracle.fit(x, y, S0=S0, k=k)
+	}
+	if('jm18' %in% names(fits)){
+		Sigma = make_Sigma(p=p, rho=feature_correlation, block_size=block_size)
+		fits[['jm18']] = function(x, y, k) jm18.fit(x, y, Sigma, k=k)	
 	}
 
   # Fit methods to data
-  if(k==1){
-  	fitted = lapply(fits, function(fn) fn(X_scaled, Y_scaled))	
-  }else{
-  	fitted = lapply(fits, function(fn) fn(X_scaled, Y_scaled, k=k))	
-  }
-	
+  # if(k==1){
+  # 	fitted = lapply(fits, function(fn) fn(X_scaled, Y_scaled))	
+  # }else{
+  # 	fitted = lapply(fits, function(fn) fn(X_scaled, Y_scaled, k=k))	
+  # }
 
+  fitted = lapply(fits, function(fn) fn(X_scaled, Y_scaled, k=k))	
+  
 	# Compute Losses
 	if(k==1){
 		fit_maes = data.frame(lapply(fitted, function(fit) MAE(fit, beta_0[1])))
