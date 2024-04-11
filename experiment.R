@@ -16,28 +16,28 @@ CORES = 6
 # then set beta_0_1 = NA.
 # Below are for Table 1 in the paper.
 param_set_1 = list(n = 100, p = 1000,
-                    s0 = 3, beta_0_1 = log(100), signal_size = log(100),
+                    s0 = 3, beta_0_1 = log(100), signal_size = log(100), signal_scheme=NA,
                     feature_correlation = 0.0)
 param_set_2 = list(n = 200, p = 800,
-                   s0 = 3, beta_0_1 = log(200), signal_size = log(100),
+                   s0 = 3, beta_0_1 = log(200), signal_size = log(100), signal_scheme=NA,
                    feature_correlation = 0.0)
 param_set_3 = list(n = 200, p = 800,
-                   s0 = 10, beta_0_1 = log(200), signal_size = log(100),
+                   s0 = 10, beta_0_1 = log(200), signal_size = log(100), signal_scheme=NA,
                    feature_correlation = 0.0)
 param_set_4 = list(n = 400, p = 1500,
-                   s0 = 32, beta_0_1 = NA, signal_size = NA,
+                   s0 = 32, beta_0_1 = NA, signal_size = NA, signal_scheme='uniform',
                    feature_correlation = 0.0)
 param_set_5 = list(n = 100, p = 1000,
-                   s0 = 3, beta_0_1 = log(100), signal_size = log(100),
+                   s0 = 3, beta_0_1 = log(100), signal_size = log(100), signal_scheme=NA,
                    feature_correlation = 0.5)
 param_set_6 = list(n = 200, p = 800,
-                   s0 = 3, beta_0_1 = log(200), signal_size = log(100),
+                   s0 = 3, beta_0_1 = log(200), signal_size = log(200), signal_scheme=NA,
                    feature_correlation = 0.5)
 param_set_7 = list(n = 200, p = 800,
-                   s0 = 10, beta_0_1 = log(200), signal_size = log(100),
-                   feature_correlation = 0.9)
+                   s0 = 10, beta_0_1 = 0,          signal_size= log(200), signal_scheme=NA,
+                   feature_correlation = 0.1)
 param_set_8 = list(n = 400, p = 1500,
-                   s0 = 32, beta_0_1 = NA, signal_size = NA,
+                   s0 = 32, beta_0_1 = NA, signal_size = NA, signal_scheme='uniform',
                    feature_correlation = 0.25)
 
 param_list = list(p1 = param_set_1, p2 = param_set_2,
@@ -47,7 +47,19 @@ param_list = list(p1 = param_set_1, p2 = param_set_2,
 
 # Define methods that we want to compare, this should be a list where you write
 # `name you want to have` = relvant fitting function from SVB.R
-fits = list(isvb = isvb.fit, mf = mf.fit, zz = zz.fit, jm = jm.fit)
+
+# For comparing various SVB methods
+# fits = list(isvb = isvb.fit, 
+#             gsvb.1 = function(X, Y) gsvb.fit(X, Y, prior_sd=1), 
+#             gsvb.4 = function(X, Y) gsvb.fit(X, Y, prior_sd=4),
+#             lsvb.1 = function(X, Y) lsvb.fit(X, Y, prior_sd=1), 
+#             lsvb.4 = function(X, Y) lsvb.fit(X, Y, prior_sd=4))
+
+# For comparison to frequentist methods
+fits = list(isvb = isvb.fit, 
+            mf = mf.fit,
+            zz = zz.fit,
+            jm = jm.fit)
 
 # Define number of replicates that should be used for estimation
 # Try a small number first to check everything works as expected.
@@ -63,6 +75,7 @@ results = lapply(param_list, function(par) estimate_stats(n=par$n,
                                                           beta_0_1=par$beta_0_1,
                                                           signal_size=par$signal_size,
                                                           feature_correlation=par$feature_correlation,
+                                                          signal_scheme=par$signal_scheme,
                                                           fits=fits,
                                                           n_replicates=n_replicates,
                                                           mc.cores=CORES))
@@ -90,6 +103,6 @@ res_tex = kable(formatted_results, format = 'latex', booktabs = TRUE,
              align = 'rcccc',
              row.names=TRUE,
              # digits = c(1,1,3,3),
-             linesep = c('', '', '', '\\hline'))
+             linesep = c('', '', '','', '\\hline'))
 writeLines(as.character(res_tex), "results/test.tex")
 
