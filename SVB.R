@@ -232,6 +232,112 @@ isvb.fit = function(X, Y, n_samples = 1000, lambda = NA, k = 1){
 	
 }
 
+isvb.qr.fit = function(X, Y, n_samples = 1000, lambda = NA, k = 1){
+  # Fit the I-SVB method on the first k coordinates.
+  t_1 = Sys.time()
+  n = dim(X)[1]
+  p = dim(X)[2]
+  if(k == 1){
+    # Treat k == 1 case separately because here we will use quantiles for cred interval
+    X1 = X[,1]
+    X1_norm_sq = sum(X1 * X1)
+    H = X1 %*% t(X1) / X1_norm_sq
+    #and the projection matrix onto span(X1)^perp
+    I_minus_H = diag(rep(1,n)) - H
+    
+    w = X1 + sign(X1[1]) * sqrt(X1_norm_sq)*c(1, rep(0, n-1))
+    Q = diag(n) - 2 * (w %*% t(w))/sum(w*w)
+    
+    P = t(Q[,2:n])
+    
+    #make W_check and Y_check
+    W_check = P %*% I_minus_H %*% X[,2:p]
+    Y_check = P %*% I_minus_H %*% Y
+    #apply svb package to the check model. Note can specify lambda via prior_scale arg
+    if(is.na(lambda)){
+      vbL_W<-svb.fit(W_check,Y_check,tol = 10e-5, max_iter = 10^4, family ="linear")  
+    }else{
+      vbL_W<-svb.fit(W_check,Y_check,tol = 10e-5, max_iter = 10^4, family ="linear",
+                     lambda = lambda)
+    }
+    mu_hat = vbL_W$mu
+    sigmas_hat = abs(vbL_W$sigma)
+    gammas_hat = vbL_W$gamma
+    #sample from the variational posterior of beta_{-1}
+    beta_minus_1_samples = sample_from_VB_posterior(n_samples,
+                                                    mu = mu_hat,
+                                                    sigma = sigmas_hat,
+                                                    gamma = gammas_hat)
+    
+    
+    #compute gammas (from DY paper, so call them gamma_prime)
+    gamma_prime = apply(X[,2:p], 2, function(x) sum(X1*x)/X1_norm_sq)
+    #diffs is a temporary variable which we subtract from beta_1^* to get beta_1
+    diffs = beta_minus_1_samples %*% gamma_prime
+    
+    # improper specific part
+    posterior_means_beta_1 = rep(1/X1_norm_sq * t(X1) %*% Y, n_samples) - diffs
+    posterior_V_beta_1 = 1/X1_norm_sq
+    posterior_samples_beta_1 = rnorm(n_samples, posterior_means_beta_1, 
+                                     sd=sqrt(posterior_V_beta_1))
+    # end improper specific part
+    
+    beta_hat = mean(posterior_samples_beta_1)
+    credible_interval = quantile(posterior_samples_beta_1, probs = c(0.025, 0.975))
+    t_2 = Sys.time()
+    return(list(beta_hat=beta_hat,
+                CI=as.numeric(credible_interval),
+                fit_time=as.numeric(difftime(t_2, t_1, units = 'secs'))))	
+  }else{
+    A_k = X[,1:k]
+    L = chol(t(A_k)%*% A_k)
+    H = A_k %*% solve(t(A_k)%*%A_k, t(A_k))
+    I_minus_H = diag(rep(1,n)) - H
+    #make the matrix P, consisting of basis vectors of span(X1)^perp
+    w = X1 + sign(X1[1]) * sqrt(X1_norm_sq)*c(1, rep(0, n-1))
+    Q = diag(n) - 2 * (w %*% t(w))/sum(w*w)
+    P = t(Q[,2:n])
+
+    W_check = P %*% I_minus_H %*% X[,(k+1):p]
+    Y_check = P %*% I_minus_H %*% Y
+    #apply svb package to the check model. Note can specify lambda via prior_scale arg
+    if(is.na(lambda)){
+      vbL_W<-svb.fit(W_check,Y_check,tol = 10e-5, max_iter = 10^4, family ="linear")  
+    }else{
+      vbL_W<-svb.fit(W_check,Y_check,tol = 10e-5, max_iter = 10^4, family ="linear",
+                     lambda = lambda)
+    }
+    #extract relevant params from the fit
+    mu_hat = vbL_W$mu
+    sigmas_hat = abs(vbL_W$sigma)
+    gammas_hat = vbL_W$gamma
+    beta_minus_k_samples = sample_from_VB_posterior(n_samples,
+                                                    mu = mu_hat,
+                                                    sigma = sigmas_hat,
+                                                    gamma = gammas_hat)
+    
+    
+    Gamma_mat = solve(t(A_k)%*%A_k, t(A_k)) %*% X[,(k+1):p]
+    
+    diffs = beta_minus_k_samples %*% t(Gamma_mat)
+    
+    # Improper specific part
+    Sigma_p = solve(t(A_k) %*% A_k, diag(k))  
+    Mu_p = Sigma_p %*% t(A_k) %*% Y
+    beta_star_k_samples = rmvnorm(n_samples, mean = Mu_p, sigma = Sigma_p)
+    beta_k_samples = beta_star_k_samples - diffs
+    # Improper specific part end
+    
+    beta_hat = apply(beta_k_samples, 2, mean)
+    cov_hat = empirical_covariance(beta_k_samples)
+    # cov_hat = Sigma_p + Gamma_mat %*% diag(sigmas_hat**2) %*% t(Gamma_mat)/n_samples
+    t_2 = Sys.time()
+    return(list(beta_hat=beta_hat,
+                cov_hat=cov_hat,
+                fit_time=as.numeric(difftime(t_2, t_1, units = 'secs'))))
+  } 
+}
+
 lsvb.fit = function(X, Y, n_samples = 1000, lambda = NA, prior_sd=1/sqrt(2), k = 1){
 	# Fit the L-SVB method with prior sd given by prior_sd. 
 	if(k != 1){
@@ -576,10 +682,14 @@ jmo.fit = function(X, Y, Sigma, k = 1){
 }
 
 oracle.fit = function(X, Y, S0, k = 1){
+	t_1 = Sys.time()
 	X_S0 = X[,S0]
 	oracle_centering = (solve(t(X_S0) %*% X_S0) %*% t(X_S0) %*% Y)[1:k]
 	oracle_matrix = solve(t(X_S0) %*% X_S0)[1:k, 1:k]
-  	return(list(beta_hat = oracle_centering, cov_hat = oracle_matrix))
+	t_2 = Sys.time()
+  return(list(beta_hat = oracle_centering, 
+  						cov_hat = oracle_matrix,
+  						fit_time=as.numeric(difftime(t_2, t_1, units = 'secs'))))
 }
 
 oracle.fit.cond = function(X, Y, S0, k = 1){
@@ -722,7 +832,7 @@ compute_level_sets = function(fit, name){
   if(is.na(name)){
     return(levels)    
   }else{
-    levels['method'] = name
+    levels['Method'] = name
     return(levels)
   }
   
@@ -763,6 +873,11 @@ sample_fits = function(n, p, s0, noise_var=1, noise='gaussian',
 		Y_scaled = Y
 	}
 	
+	S0 = which(beta_0!=0)
+	if('oracle' %in% names(fits)){
+		fits[['oracle']] = function(x, y, k) oracle.fit(x, y, S0=S0, k=k)
+	}
+
   # Fit methods to data
   if(k==1){
   	fitted = lapply(fits, function(fn) fn(X_scaled, Y_scaled))	
@@ -814,8 +929,7 @@ estimate_stats = function(n, p, s0, beta_0_1, noise_var=1, noise='gaussian',
 					   feature_correlation, block_size, rescale_first_column, k),
 	 mc.cores=mc.cores
 	 )
-
-	print('Outside of parallel loop')
+	print('Finished replicates.')
 	if(k == 1){
 		metrics = 		c('hit', 'mae', 'length','time')
 		compute_sd = 	c(FALSE,  TRUE, TRUE,  TRUE)
@@ -857,8 +971,13 @@ format_results = function(res, round=3, methods=names(fits), k=1){
     metric_sd = metrics_sd[i]
     if(metric == 'volume'){
       # Then normalise
-      met_col = paste(format(round(mean_df[[metric]]/mean_df[[metric]]['isvb'],round), round),
-                      format(round(sd_df[[metric]]/mean_df[[metric]]['isvb'],round), round), sep = ' ± ')
+      if('oracle' %in% methods){
+      		met_col = paste(format(round(mean_df[[metric]]/mean_df[[metric]]['oracle'],round), round),
+                      format(round(sd_df[[metric]]/mean_df[[metric]]['oracle'],round), round), sep = ' ± ')		
+      	}else{
+      		met_col = paste(format(round(mean_df[[metric]]/mean_df[[metric]]['isvb'],round), round),
+                      format(round(sd_df[[metric]]/mean_df[[metric]]['isvb'],round), round), sep = ' ± ')		
+      	}
     }else if(metric_sd){
       met_col = paste(format(round(mean_df[[metric]],round), round),
                       format(round(sd_df[[metric]],round), round), sep = ' ± ')
