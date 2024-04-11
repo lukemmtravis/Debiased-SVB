@@ -28,9 +28,9 @@ simulate_set = function(n, p, s0, rho=0.0, seed=1, scenario=1){
   names(level_sets) = names(fits)
   level_sets = do.call(rbind, level_sets)
   centerings = data.frame(do.call(rbind, lapply(fits, function(fit) fit$beta_hat)))
-  centerings['method'] = names(fits)
-  colnames(centerings) = c('beta1', 'beta2', 'method')
-  truth = data.frame(beta1=beta_0[1],beta2=beta_0[2],method='truth')
+  centerings['Method'] = names(fits)
+  colnames(centerings) = c('beta1', 'beta2', 'Method')
+  truth = data.frame(beta1=beta_0[1],beta2=beta_0[2],Method='Truth')
   data = list(level_sets=level_sets, centerings=centerings, truth=truth)
   
   data = lapply(data, function(df){
@@ -42,10 +42,9 @@ simulate_set = function(n, p, s0, rho=0.0, seed=1, scenario=1){
 }
 
 p1 = list(n = 200, p = 400, s0=10, rho = 0, seed = 1, scenario = 1)
-p2 = list(n = 600, p = 800, s0=10, rho = 0.1, seed = 1, scenario = 2)
+p2 = list(n = 400, p = 800, s0=10, rho = 0.2, seed = 2, scenario = 2)
 p3 = list(n = 600, p = 1600, s0=15, rho = 0.5, seed = 3, scenario = 3)
 params = list(p1 = p1, p2 = p2, p3 = p3)
-# params = list(p1 = p1)
 
 data = lapply(params, function(par) 
   simulate_set(n=par$n, p=par$p, s0=par$s0, rho=par$rho, seed=par$seed, scenario=par$scenario))
@@ -54,14 +53,24 @@ level_sets = do.call(rbind, lapply(data, function(x) x$level_sets))
 centerings = do.call(rbind, lapply(data, function(x) x$centerings))
 truth = do.call(rbind, lapply(data, function(x) x$truth))
 
-ggplot(level_sets, aes(x=beta1, y=beta2, color=method)) + geom_path() +
+# If one wants to define axis limits individually, 
+# use the below dummy dataframe and uncomment the geom_blank line below
+# dummy_p1 = data.frame(beta1 = c(4.5, 5.2), beta2 = c(4.5, 5.2), Scenario=1, Method='Z')
+# dummy_p2 = data.frame(beta1 = c(4.7, 5.2), beta2 = c(4.7, 5.2), Scenario=2, Method='Z')
+# dummy_p3 = data.frame(beta1 = c(3.9, 5.2), beta2 = c(3.9, 5.2), Scenario=3, Method='Z')
+# dummy_dat = rbind(dummy_p1, dummy_p2, dummy_p3)
+
+
+ggplot(level_sets, aes(x=beta1, y=beta2, color=Method)) + geom_path() +
   geom_point(data=centerings, shape='cross') +
   geom_point(data=truth) +
-  # geom_path(data=adj_vecs)+
-  facet_wrap(~Scenario) +
+  facet_wrap(~Scenario, scales='free') +
+  theme(legend.position = 'bottom') +
+  # geom_blank(data=dummy_dat, aes(x=beta1,y=beta2, shape=Method)) +
   xlab(TeX(r'($\beta_1$)')) + 
   ylab(TeX(r'($\beta_2$)'))
-# ggsave('results/3_credible_regions.pdf', units = 'in', width = 12, height = 6)
+
+ggsave('results/3_credible_regions.pdf', units = 'in', width = 12, height = 6)
 
 
 
