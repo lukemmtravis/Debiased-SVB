@@ -109,14 +109,21 @@ make_X = function(n, p,
 make_data = function(n, p, s0, noise_var=1, noise = 'gaussian',
 					 beta_0_1 = NA, signal_size = NA, signal_scheme = 'normal',
 					 feature_correlation = 0, block_size = NA, rescale_first_column = FALSE,
-					 k = 1){
+					 k = 1, dataset = 'generated'){
 	# Produce X, Y and beta_0 with given structure for simulations.
 	# make beta_0
 	beta_0 = make_beta(p, s0, k, beta_0_1=beta_0_1, signal_size=signal_size, signal_scheme=signal_scheme)
 
-
 	# make design
-	X = make_X(n, p, feature_correlation=feature_correlation, block_size=block_size, rescale_first_column=FALSE)
+	if(dataset=='generated'){
+		X = make_X(n, p, feature_correlation=feature_correlation, block_size=block_size, rescale_first_column=FALSE)	
+	}else if(dataset=='riboflavin'){
+		print('Using riboflavin data...')
+		X = read.csv('riboflavin_normalized.csv')
+	}else{
+		stop('dataset must be one of `generated` or `riboflavin`.')
+	}
+	
 
 	# make eps
 	if(noise == 'gaussian'){
@@ -129,10 +136,10 @@ make_data = function(n, p, s0, noise_var=1, noise = 'gaussian',
     	stop('noise must be in {gaussian, laplace, uniform}.')
     }
 
-    # make Y
-    Y = X%*%beta_0 + eps
+  # make Y
+  Y = X%*%beta_0 + eps
 
-    return(list(Y=Y, X=X, beta_0=beta_0)) 
+  return(list(Y=Y, X=X, beta_0=beta_0)) 
 }
 
 #### SVB Functions ####
@@ -716,7 +723,7 @@ jmo.fit = function(X, Y, Sigma, k = 1){
 	}
 }
 
-br23.fit = function(X, Y, k = 1){
+br23.fit = function(X, Y, k = 1, delta = 1){
 	n = dim(X)[1]
 	p = dim(X)[2]
 
@@ -729,7 +736,7 @@ br23.fit = function(X, Y, k = 1){
 	Xv <- X[,1]
   Xnotv <- X[, -1, drop = FALSE]
   M <- Xnotv %*% t(Xnotv)
-  qOpt <- solve(diag(n) + M, Xv)
+  qOpt <- solve( delta*diag(n) + M, Xv)
   scale <- t(qOpt) %*% Xv
   variance <- tau * (t(qOpt) %*% qOpt) / (t(qOpt) %*% Xv)^2
   beta_hat <- t(qOpt) %*% Y / t(qOpt) %*% Xv
@@ -924,7 +931,8 @@ sample_fits = function(n, p, s0, noise_var=1, noise='gaussian',
 					   fits = list(isvb=isvb.fit, zz=zz.fit, jm=jm.fit),
 					   beta_0_1 = NA, signal_size = NA, signal_scheme = 'normal',
 					   feature_correlation = 0, block_size = NA, rescale_first_column = FALSE,
-					   k=1){
+					   k=1,
+					   dataset='generated'){
 	'
 	Sample data according to params given in the function. 
 	Fit each method supplied in `fits` to X and Y
@@ -934,11 +942,10 @@ sample_fits = function(n, p, s0, noise_var=1, noise='gaussian',
 	dat = make_data(n, p, s0, noise_var, noise=noise,
 					beta_0_1=beta_0_1, signal_size=signal_size, signal_scheme=signal_scheme,
 					feature_correlation=feature_correlation, block_size=block_size, rescale_first_column=rescale_first_column,
-					k=k)
+					k=k, dataset=dataset)
 	X = dat$X
 	Y = dat$Y
-	beta_0 = dat$beta_0
-
+	beta_0 = dat$beta_0	
 
 	# Noise estimation and normalisation the same for all appraoches
 	if(noise_var != 1){
@@ -994,7 +1001,7 @@ estimate_stats = function(n, p, s0, beta_0_1, noise_var=1, noise='gaussian',
 					   signal_size = NA, signal_scheme = 'normal',
 					   feature_correlation = 0, block_size = NA, rescale_first_column = FALSE,
 					   n_replicates = 100, mc.cores = 1,
-					   k=1){
+					   k = 1, dataset = 'generated'){
 	'
 	Sample data according to params given in the function. 
 	Fit each method supplied in fits to X and Y
