@@ -111,18 +111,20 @@ make_data = function(n, p, s0, noise_var=1, noise = 'gaussian',
 					 feature_correlation = 0, block_size = NA, rescale_first_column = FALSE,
 					 k = 1, dataset = 'generated'){
 	# Produce X, Y and beta_0 with given structure for simulations.
-	# make beta_0
-	beta_0 = make_beta(p, s0, k, beta_0_1=beta_0_1, signal_size=signal_size, signal_scheme=signal_scheme)
 
 	# make design
 	if(dataset=='generated'){
 		X = make_X(n, p, feature_correlation=feature_correlation, block_size=block_size, rescale_first_column=FALSE)	
 	}else if(dataset=='riboflavin'){
-		print('Using riboflavin data...')
-		X = read.csv('riboflavin_normalized.csv')
+		X = as.matrix(read.csv('riboflavin_normalized.csv'))
+		n = dim(X)[1]
+		p = dim(X)[2]
 	}else{
 		stop('dataset must be one of `generated` or `riboflavin`.')
 	}
+
+	# make beta_0
+	beta_0 = make_beta(p, s0, k, beta_0_1=beta_0_1, signal_size=signal_size, signal_scheme=signal_scheme)
 	
 
 	# make eps
@@ -1020,7 +1022,7 @@ estimate_stats = function(n, p, s0, beta_0_1, noise_var=1, noise='gaussian',
 	reps = mc_replicate(n_replicates,
 	 sample_fits(n, p, s0, noise_var, noise,
 					   fits, beta_0_1, signal_size, signal_scheme,
-					   feature_correlation, block_size, rescale_first_column, k),
+					   feature_correlation, block_size, rescale_first_column, k, dataset),
 	 mc.cores=mc.cores
 	 )
 	print('Finished replicates.')
