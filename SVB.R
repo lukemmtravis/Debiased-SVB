@@ -16,41 +16,37 @@ source('lasso_inference.r')
 
 #### Data Generation Functions ####
 
-make_Sigma = function(p, rho, block_size=NA){
-	if(is.na(block_size)){
+make_Sigma = function(p, rho, block_size=NA, AR=FALSE){
+	if(!AR){
+		if(is.na(block_size)){
       block_size = p
     }
-  if(p %% block_size != 0){
-      stop('Block size does not divide p')
-    }
-  B = matrix(rho, nrow = block_size, ncol = block_size)
-  diag(B) = rep(1,block_size)
-    
-  Sigma = matrix(0, nrow = p, ncol = p)
-  for(block_num in 1:(p/block_size) ){
-    start_ix = (block_num - 1)*block_size + 1
-    end_ix = block_num*block_size
-    Sigma[start_ix:end_ix, start_ix:end_ix] = B
-  }
-  return(Sigma)
+	  if(p %% block_size != 0){
+	      stop('Block size does not divide p')
+	    }
+	  B = matrix(rho, nrow = block_size, ncol = block_size)
+	  diag(B) = rep(1,block_size)
+	    
+	  Sigma = matrix(0, nrow = p, ncol = p)
+	  for(block_num in 1:(p/block_size) ){
+	    start_ix = (block_num - 1)*block_size + 1
+	    end_ix = block_num*block_size
+	    Sigma[start_ix:end_ix, start_ix:end_ix] = B
+	  }
+  	return(Sigma)	
+	}else{
+		Sigma = matrix(nrow=p, ncol=p)
+		for(i in c(1:p)){
+			for(j in c(1:p)){
+				Sigma[i, j] = rho**abs(i - j)
+			}
+		}
+		return(Sigma)
+	}
 }
 
-sample_block_correlated_inputs = function(n, p, rho, block_size=NA){
-    if(is.na(block_size)){
-      block_size = p
-    }
-    if( p %% block_size != 0){
-      stop('Block size does not divide p')
-    }
-    B = matrix(rho, nrow = block_size, ncol = block_size)
-    diag(B) = rep(1,block_size)
-    
-    Sigma = matrix(0, nrow = p, ncol = p)
-    for(block_num in 1:(p/block_size) ){
-      start_ix = (block_num - 1)*block_size + 1
-      end_ix = block_num*block_size
-      Sigma[start_ix:end_ix, start_ix:end_ix] = B
-    }
+sample_block_correlated_inputs = function(n, p, rho, block_size=NA, AR=FALSE){
+    Sigma = make_Sigma(p, rho, block_size, AR)
     U = chol(Sigma)
     normal_sample = matrix(rnorm(n*p), nrow = n, ncol = p)
     X = normal_sample%*%U
@@ -75,22 +71,31 @@ make_beta = function(p, s0, k = 1, beta_0_1 = NA, signal_size = NA, signal_schem
     if(is.na(signal_size)){
     	if(signal_scheme == 'normal'){
     		beta_0[S_0] = rnorm(s0)  
-		}else if(signal_scheme=='uniform'){
-			beta_0[S_0] = runif(s0, -5, 5)
-		}else{
-			stop('signal_scheme, must be one in {normal, uniform}.')
-		}
+			}else if(signal_scheme=='uniform'){
+				beta_0[S_0] = runif(s0, -5, 5)
+			}else if(signal_scheme=='very_weak'){
+				if(s0 < 10){
+					stop('For very_weak signal_scheme, s0 must be larger than 10')
+				}
+				weak_indices = S_0[1:5]
+				strong_indices = S_0[6:s0]
+				beta_0[weak_indices] = 0.01
+				beta_0[strong_indices] = log(p)/s0 
+				return(beta_0)
+			}else{
+				stop('signal_scheme, must be one in {normal, uniform, very_weak}.')
+			}
     }else{
       beta_0[S_0] = signal_size
     }
-    if(!is.na(beta_0_1)){
+    if(any(!is.na(beta_0_1))){
     	beta_0[1:k] = beta_0_1
     }
     return(beta_0)
 }
 
 make_X = function(n, p, 
-				feature_correlation = 0, block_size = NA, rescale_first_column = FALSE){
+				feature_correlation = 0, block_size = NA, rescale_first_column = FALSE, AR = FALSE){
 	# Produce X with given structure.
 	if(is.na(feature_correlation)){
       X = matrix(rnorm(n*p), nrow = n, ncol = p)  
@@ -98,7 +103,7 @@ make_X = function(n, p,
         X[,1] = X[,1]/sqrt(sum(X[,1]*X[,1]))
       }
     }else{
-      X = sample_block_correlated_inputs(n, p, rho = feature_correlation, block_size = block_size)
+      X = sample_block_correlated_inputs(n, p, rho = feature_correlation, block_size = block_size, AR = AR)
       if(rescale_first_column){
         X[,1] = X[,1]/sqrt(sum(X[,1]*X[,1]))
       }
@@ -108,23 +113,43 @@ make_X = function(n, p,
 
 make_data = function(n, p, s0, noise_var=1, noise = 'gaussian',
 					 beta_0_1 = NA, signal_size = NA, signal_scheme = 'normal',
-					 feature_correlation = 0, block_size = NA, rescale_first_column = FALSE,
-					 k = 1, dataset = 'generated'){
+					 feature_correlation = 0, block_size = NA, rescale_first_column = FALSE, AR = FALSE,
+					 k = 1, dataset = 'generated', index=1){
 	# Produce X, Y and beta_0 with given structure for simulations.
 
 	# make design
 	if(dataset=='generated'){
-		X = make_X(n, p, feature_correlation=feature_correlation, block_size=block_size, rescale_first_column=FALSE)	
+		X = make_X(n, p, feature_correlation=feature_correlation, block_size=block_size,
+										 rescale_first_column=FALSE, AR=AR)	
+		beta_0 = make_beta(p, s0, k, beta_0_1=beta_0_1, signal_size=signal_size, signal_scheme=signal_scheme)
 	}else if(dataset=='riboflavin'){
 		X = as.matrix(read.csv('riboflavin_normalized.csv'))
+		# reorder columns so that index is first.
+		X = X[,c(index, c(1:p)[-index])]
 		n = dim(X)[1]
 		p = dim(X)[2]
+		beta_0 = rep(0,p)
+    if(is.na(signal_size)){
+    	if(signal_scheme == 'normal'){
+    		beta_0[1:s0] = rnorm(s0)  
+			}else if(signal_scheme=='uniform'){
+				beta_0[1:s0] = runif(s0, -5, 5)
+			}else{
+				stop('signal_scheme, must be one in {normal, uniform}.')
+			}
+    }else{
+      beta_0[1:s0] = signal_size
+    }
+    if(!is.na(beta_0_1)){
+    	beta_0[1:k] = beta_0_1
+    }
+    # beta_0 = make_beta(p, s0, k, beta_0_1=beta_0_1, signal_size=signal_size, signal_scheme=signal_scheme)
 	}else{
 		stop('dataset must be one of `generated` or `riboflavin`.')
 	}
 
 	# make beta_0
-	beta_0 = make_beta(p, s0, k, beta_0_1=beta_0_1, signal_size=signal_size, signal_scheme=signal_scheme)
+	# beta_0 = make_beta(p, s0, k, beta_0_1=beta_0_1, signal_size=signal_size, signal_scheme=signal_scheme)
 	
 
 	# make eps
@@ -755,6 +780,73 @@ br23.fit = function(X, Y, k = 1, delta = 1){
 					fit_time=as.numeric(difftime(t_2, t_1, units = 'secs'))))	
 }
 
+freq.fit = function(X, Y, k = 1){
+	# Fit the I-SVB method on the first k coordinates.
+	t_1 = Sys.time()
+	n = dim(X)[1]
+	p = dim(X)[2]
+	if(k == 1){
+		# Treat k == 1 case separately because here we will use quantiles for cred interval
+		X1 = X[,1]
+    X1_norm_sq = sum(X1 * X1)
+    H = X1 %*% t(X1) / X1_norm_sq
+		#and the projection matrix onto span(X1)^perp
+		I_minus_H = diag(rep(1,n)) - H
+
+		#make the matrix P, consisting of basis vectors of span(X1)^perp
+		svd_temp = svd(I_minus_H)
+		U = svd_temp$u[,1:(n-1)]
+		P = t(U)
+
+		#make W_check and Y_check
+		W_check = P %*% I_minus_H %*% X[,2:p]
+		Y_check = P %*% I_minus_H %*% Y
+		#apply svb package to the check model. Note can specify lambda via prior_scale arg
+		mod = cv.glmnet(W_check, Y_check)
+	  fit = glmnet(W_check, Y_check, lambda = mod$lambda.min)
+	  beta_minus_1_hat = fit$beta
+
+	  beta_hat = as.numeric(t(X1) %*% (Y - X[,-1] %*% beta_minus_1_hat) / X1_norm_sq)
+
+	  z_95 = as.numeric(qnorm(0.975))
+    credible_interval = c(
+    	beta_hat - z_95 / sqrt(X1_norm_sq),
+    	beta_hat + z_95 / sqrt(X1_norm_sq)
+    	)
+    t_2 = Sys.time()
+    return(list(beta_hat=beta_hat,
+    			CI=credible_interval,
+    			fit_time=as.numeric(difftime(t_2, t_1, units = 'secs'))))	
+	}else{
+		
+		A_k = X[,1:k]
+    L = chol(t(A_k)%*% A_k)
+    H = A_k %*% solve(t(A_k)%*%A_k, t(A_k))
+		I_minus_H = diag(rep(1,n)) - H
+		# #make the matrix P, consisting of basis vectors of span(X1)^perp
+		svd_temp = svd(I_minus_H)
+		U = svd_temp$u[,1:(n-k)]
+		P = t(U)
+		W_check = P %*% I_minus_H %*% X[,(k+1):p]
+		Y_check = P %*% I_minus_H %*% Y
+		mod = cv.glmnet(W_check, Y_check)
+	  fit = glmnet(W_check, Y_check, lambda = mod$lambda.min)
+	  beta_minus_k_hat = fit$beta
+
+	  beta_hat = as.numeric(solve(t(A_k)%*% A_k ) %*% t(A_k) %*% (Y - X[,-c(1:k)] %*% beta_minus_k_hat))
+		cov_hat = solve(t(A_k) %*% A_k )
+
+		# beta_hat = apply(beta_k_samples, 2, mean)
+		# cov_hat = empirical_covariance(beta_k_samples)
+		# # cov_hat = Sigma_p + Gamma_mat %*% diag(sigmas_hat**2) %*% t(Gamma_mat)/n_samples
+		t_2 = Sys.time()
+		return(list(beta_hat=beta_hat,
+					cov_hat=cov_hat,
+					fit_time=as.numeric(difftime(t_2, t_1, units = 'secs'))))
+	}
+	
+}
+
 oracle.fit = function(X, Y, S0, k = 1){
 	if(k == 1){
 		gamma=0.95
@@ -771,18 +863,43 @@ oracle.fit = function(X, Y, S0, k = 1){
 	  						fit_time=as.numeric(difftime(t_2, t_1, units = 'secs'))))
 	}else{
 		t_1 = Sys.time()
-		X_S0 = X[,S0]
-		oracle_centering = (solve(t(X_S0) %*% X_S0) %*% t(X_S0) %*% Y)[1:k]
-		oracle_matrix = solve(t(X_S0) %*% X_S0)[1:k, 1:k]
-		t_2 = Sys.time()
-	  return(list(beta_hat = oracle_centering, 
+		if(length(intersect(S0, c(1:k))) == 0){
+			t_2 = Sys.time()
+			return(list(beta_hat = rep(0, k), 
+	  						cov_hat = matrix(0, nrow=k, ncol=k),
+	  						fit_time=as.numeric(difftime(t_2, t_1, units = 'secs'))))
+		}else if(length(intersect(S0, c(1:k))) == k){
+			X_S0 = X[,S0]
+			oracle_centering = (solve(t(X_S0) %*% X_S0) %*% t(X_S0) %*% Y)[1:k]
+			oracle_matrix = solve(t(X_S0) %*% X_S0)[1:k, 1:k]
+			t_2 = Sys.time()
+		  return(list(beta_hat = oracle_centering, 
 	  						cov_hat = oracle_matrix,
 	  						fit_time=as.numeric(difftime(t_2, t_1, units = 'secs'))))
+		}else{
+			X_S0 = X[,S0]
+			full_oracle_centering = (solve(t(X_S0) %*% X_S0) %*% t(X_S0) %*% Y)
+			full_oracle_matrix = solve(t(X_S0) %*% X_S0)
+			# Assume that beta_0 consists of zero coordinates followed by non-zero coordinates
+			nnz = length(intersect(S0, c(1:k)))
+			nz = k - nnz
+			beta_hat = c(rep(0, nz), full_oracle_centering[1:nnz])
+			cov_hat = matrix(0, nrow=k, ncol=k)
+			cov_hat[(nz+1):k, (nz+1):k] = full_oracle_matrix[1:nnz, 1:nnz]
+			t_2 = Sys.time()
+		  return(list(beta_hat = beta_hat, 
+	  						cov_hat = cov_hat,
+	  						fit_time=as.numeric(difftime(t_2, t_1, units = 'secs'))))
+		}
 	}
 }
 
-oracle.fit.cond = function(X, Y, S0, k = 1){
+oracle.fit.cond = function(X, Y, S0, cond_on = NA, k = 1){
+	if(length(S0) == k){
+		return(oracle.fit(X, Y, S0, k))
+	}
 	X_S0 = X[,S0]
+
 	oracle_centering = (solve(t(X_S0) %*% X_S0) %*% t(X_S0) %*% Y)
 	oracle_matrix = solve(t(X_S0) %*% X_S0)
 
@@ -793,10 +910,10 @@ oracle.fit.cond = function(X, Y, S0, k = 1){
 	M_k_minus_k = oracle_matrix[1:k, -c(1:k)]
 	M_minus_k = oracle_matrix[-c(1:k), -c(1:k)]
 
-
+	beta_hat = as.numeric(mu_k + M_k_minus_k %*% solve(M_minus_k) %*% (cond_on - mu_minus_k))
 	cov_hat = M_k - M_k_minus_k %*% solve(M_minus_k) %*% t(M_k_minus_k)
 
-	return(list(beta_hat = mu_k, cov_hat = cov_hat))
+	return(list(beta_hat = beta_hat, cov_hat = cov_hat))
 }
 
 #### Compute and Evaluate Fits ####
@@ -831,6 +948,8 @@ L2 = function(fit, truth){
 }
 
 kHit = function(fit, truth){
+	# Note, can cope with first diagonal elements of the covariance being 0, then just checks beta_hat
+	# in those coordinates is equal to the truth, and performs the routine on the submatrix
 	est = fit$beta_hat
 	k = length(est)
 	beta_0_k = truth[1:k]
@@ -844,8 +963,23 @@ kHit = function(fit, truth){
   	cov=mat
   }
 
-	test_val = t(beta_0_k - est) %*% solve(cov) %*% (beta_0_k - est) 
-	hit = test_val <= chi_zval
+  zero_inds = which(diag(mat) == 0)
+	non_zero_inds = which(diag(mat) != 0)
+
+	if(length(non_zero_inds) == k){
+		test_val = t(beta_0_k - est) %*% solve(cov) %*% (beta_0_k - est) 
+		hit = test_val <= chi_zval
+	}else if(length(zero_inds) == k){
+	  hit = all(est == beta_0_k)
+	}else{
+	  zero_equality = all(est[zero_inds] == beta_0_k[zero_inds])
+	  sub_cov = cov[non_zero_inds, non_zero_inds]
+	  sub_est = est[non_zero_inds]
+	  sub_beta_0 = beta_0_k[non_zero_inds]
+	  test_val = t(sub_beta_0 - sub_est) %*% solve(sub_cov) %*% (sub_beta_0 - sub_est) 
+	  sub_hit = test_val <= chi_zval
+	  hit = sub_hit && zero_equality
+	}
 	return(hit)
 }
 
@@ -870,12 +1004,23 @@ cov.adj = function(mat, add_length, chi_zval){
   svd_mat = svd(mat)
   evals = svd_mat$d
   V = svd_mat$u
+ 
+
+  if(min(svd(V**2)$d) < 1e-15){
+  	# happens with very small probability, in this case cannot add length correctly in
+  	# e1 and e2 directions, as both dimension are lengthened simultaneously
+  	lambda_tilde = evals + add_length
+  }else{
+  	# below adds length in directions of canonical basis (correct)
+	  M_inv = solve(mat)
+	  ys = 1/diag(M_inv) + 2*add_length*sqrt(1/(chi_zval * diag(M_inv))) + add_length**2/chi_zval
+  	# cat('mat:  \n', mat,  '\n-------\n')
+	  # cat('V**2: \n', V**2, '\n-------\n')
+	  # cat('1/ys: \n', 1/ys, '\n-------\n')
+	  lambda_tilde_inverse= solve(V**2, 1/ys)
+	  lambda_tilde = abs(1/lambda_tilde_inverse)	
+  }
   
-  # below adds length in directions of canonical basis (correct)
-  M_inv = solve(mat)
-  ys = 1/diag(M_inv) + 2*add_length*sqrt(1/(chi_zval * diag(M_inv))) + add_length**2/chi_zval
-  lambda_tilde_inverse= solve(V**2, 1/ys)
-  lambda_tilde = abs(1/lambda_tilde_inverse)
   adj_mat = V %*% diag(lambda_tilde) %*% t(V)
   return(adj_mat)
 }
@@ -932,9 +1077,9 @@ compute_level_sets = function(fit, name){
 sample_fits = function(n, p, s0, noise_var=1, noise='gaussian',
 					   fits = list(isvb=isvb.fit, zz=zz.fit, jm=jm.fit),
 					   beta_0_1 = NA, signal_size = NA, signal_scheme = 'normal',
-					   feature_correlation = 0, block_size = NA, rescale_first_column = FALSE,
+					   feature_correlation = 0, block_size = NA, rescale_first_column = FALSE, AR = FALSE,
 					   k=1,
-					   dataset='generated'){
+					   dataset='generated', index=1){
 	'
 	Sample data according to params given in the function. 
 	Fit each method supplied in `fits` to X and Y
@@ -943,8 +1088,8 @@ sample_fits = function(n, p, s0, noise_var=1, noise='gaussian',
 	# Generate data according to input parameters
 	dat = make_data(n, p, s0, noise_var, noise=noise,
 					beta_0_1=beta_0_1, signal_size=signal_size, signal_scheme=signal_scheme,
-					feature_correlation=feature_correlation, block_size=block_size, rescale_first_column=rescale_first_column,
-					k=k, dataset=dataset)
+					feature_correlation=feature_correlation, block_size=block_size, rescale_first_column=rescale_first_column, AR=AR,
+					k=k, dataset=dataset, index=index)
 	X = dat$X
 	Y = dat$Y
 	beta_0 = dat$beta_0	
@@ -962,7 +1107,6 @@ sample_fits = function(n, p, s0, noise_var=1, noise='gaussian',
 		Y_scaled = Y
 	}
 	
-	
 	# use anonymous functions to place 'oracle' quantities as necessary
 	if('oracle' %in% names(fits)){
 		S0 = which(beta_0!=0)
@@ -972,13 +1116,6 @@ sample_fits = function(n, p, s0, noise_var=1, noise='gaussian',
 		Sigma = make_Sigma(p=p, rho=feature_correlation, block_size=block_size)
 		fits[['jm18']] = function(x, y, k) jm18.fit(x, y, Sigma, k=k)	
 	}
-
-  # Fit methods to data
-  # if(k==1){
-  # 	fitted = lapply(fits, function(fn) fn(X_scaled, Y_scaled))	
-  # }else{
-  # 	fitted = lapply(fits, function(fn) fn(X_scaled, Y_scaled, k=k))	
-  # }
 
   fitted = lapply(fits, function(fn) fn(X_scaled, Y_scaled, k=k))	
   
@@ -1001,9 +1138,9 @@ sample_fits = function(n, p, s0, noise_var=1, noise='gaussian',
 estimate_stats = function(n, p, s0, beta_0_1, noise_var=1, noise='gaussian',
 					   fits = list(isvb=isvb.fit, zz=zz.fit, jm=jm.fit),
 					   signal_size = NA, signal_scheme = 'normal',
-					   feature_correlation = 0, block_size = NA, rescale_first_column = FALSE,
+					   feature_correlation = 0, block_size = NA, rescale_first_column = FALSE, AR = FALSE,
 					   n_replicates = 100, mc.cores = 1,
-					   k = 1, dataset = 'generated'){
+					   k = 1, dataset = 'generated', index = 1, override_core_warning=FALSE){
 	'
 	Sample data according to params given in the function. 
 	Fit each method supplied in fits to X and Y
@@ -1012,6 +1149,7 @@ estimate_stats = function(n, p, s0, beta_0_1, noise_var=1, noise='gaussian',
 	'
 	cat('\n---------------------------',
 		'\nRunning experiment with:',
+		'\n index: ', index,
 		'\nn: ',n,
 		'\np: ', p,'\ns0: ',s0,'\nbeta_0_1: ',beta_0_1,
 		'\nnoise_var: ',noise_var,'\nnoise: ',noise,
@@ -1019,10 +1157,14 @@ estimate_stats = function(n, p, s0, beta_0_1, noise_var=1, noise='gaussian',
 		'\nfeature_correlation: ', feature_correlation,'\nn_replicates: ',n_replicates,
 		'\ncores: ',mc.cores,
 		'\n----------------------------\n')
+	if((mc.cores > 8) && !override_core_warning){
+		stop('Are you sure you want to use more than 8 cores?
+		 If so, call this funciton with override_core_warning=TRUE')
+	}
 	reps = mc_replicate(n_replicates,
 	 sample_fits(n, p, s0, noise_var, noise,
 					   fits, beta_0_1, signal_size, signal_scheme,
-					   feature_correlation, block_size, rescale_first_column, k, dataset),
+					   feature_correlation, block_size, rescale_first_column, AR, k, dataset, index),
 	 mc.cores=mc.cores
 	 )
 	print('Finished replicates.')
@@ -1068,8 +1210,10 @@ format_results = function(res, round=3, methods=names(fits), k=1){
     if(metric == 'volume'){
       # Then normalise
       if('oracle' %in% methods){
-      		met_col = paste(format(round(mean_df[[metric]]/mean_df[[metric]]['oracle'],round), round),
-                      format(round(sd_df[[metric]]/mean_df[[metric]]['oracle'],round), round), sep = ' ± ')		
+      		normalisation = mean_df[[metric]]['oracle']
+      		if(normalisation == 0){normalisation = mean_df[[metric]]['isvb']}
+      		met_col = paste(format(round(mean_df[[metric]]/normalisation,round), round),
+                      format(round(sd_df[[metric]]/normalisation,round), round), sep = ' ± ')		
       	}else{
       		met_col = paste(format(round(mean_df[[metric]]/mean_df[[metric]]['isvb'],round), round),
                       format(round(sd_df[[metric]]/mean_df[[metric]]['isvb'],round), round), sep = ' ± ')		
@@ -1088,3 +1232,28 @@ format_results = function(res, round=3, methods=names(fits), k=1){
   return(formatted_results)
 }
 
+format_riboflavin_results = function(results, round=3, methods=names(fits), k=1){
+	if(k != 1){
+		stop('format_riboflavin_results() only implemented with k = 1.')
+	}
+  mean_data <- lapply(results, function(x) x$mean)
+	sd_data <- lapply(results, function(x) x$sd)
+	metrics = c('hit', 'mae', 'length','time')
+	metrics_sd = 	c(FALSE,  TRUE, TRUE,  TRUE)
+	mean_results = list()
+	sd_results = list()
+	for(i in c(1:length(metrics))){
+	  metric = metrics[i]
+	  metric_sd  = metrics_sd[i]
+	  metric_list = lapply(mean_data, function(x) x[[metric]])
+	  metric_mean = colMeans(do.call(rbind, metric_list))  
+	  mean_results[[metric]] = metric_mean
+	  if(metric_sd){
+	    sd_metric_list = lapply(sd_data, function(x) x[[metric]])
+	    sd_metric_mean = colMeans(do.call(rbind, sd_metric_list))  
+	    sd_results[[metric]] = sd_metric_mean
+	  }
+	}
+
+	return(format_results(list('mean'=mean_results, 'sd'=sd_results)))
+}
