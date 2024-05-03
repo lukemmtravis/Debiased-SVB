@@ -360,8 +360,8 @@ SSLasso <- function (X, y, alpha=0.05, lambda = NULL, mu = NULL, intercept = TRU
   sigma.hat <- (1/n)*(t(Xb)%*%Xb);
   
   if ((n>=2*p)){
-	tmp <- eigen(sigma.hat)
-	tmp <- min(tmp$values)/max(tmp$values)
+	 tmp <- eigen(sigma.hat)
+	 tmp <- min(tmp$values)/max(tmp$values)
   }else{
 	tmp <- 0
   }
@@ -700,5 +700,101 @@ SSLassoFirstCoordAdjusted <- function (X, y, alpha=0.05, lambda = NULL, mu = NUL
                      "low.lim" = unbiased.Lasso - interval.sizes - addlength,
                      "up.lim" = unbiased.Lasso + interval.sizes + addlength
            )
+  return(returnList)
+}
+
+SSLassoKnownSigmaK <- function (X, y, Sigma, k, alpha=0.05, lambda = NULL, mu = NULL, intercept = FALSE, 
+                     resol=1.3, maxiter=50, threshold=1e-2) {
+#
+# Compute confidence intervals and p-values.
+#
+# Args:
+#   X     :  design matrix
+#   y     :  response
+#   alpha :  significance level
+#   lambda:  Lasso regularization parameter (if null, fixed by sqrt lasso)
+#   mu    :  Linfty constraint on M (if null, searches)
+#   resol :  step parameter for the function that computes M
+#   maxiter: iteration parameter for computing M
+#   threshold : tolerance criterion for computing M
+#   verbose : verbose?
+#
+# Returns:
+#   noise.sd: Estimate of the noise standard deviation
+#   norm0   : Estimate of the number of 'significant' coefficients
+#   coef    : Lasso estimated coefficients
+#   unb.coef: Unbiased coefficient estimates
+#   low.lim : Lower limits of confidence intervals
+#   up.lim  : upper limit of confidence intervals
+#   pvals   : p-values for the coefficients            
+#
+  p <- ncol(X);
+  n <- nrow(X);
+  pp <- p;
+  col.norm <- 1/sqrt((1/n)*diag(t(X)%*%X));
+  X <- X %*% diag(col.norm);
+
+  htheta <- Lasso (X,y,lambda=lambda,intercept=intercept);
+
+  if (intercept==TRUE){
+    Xb <- cbind(rep(1,n),X);
+    col.norm <- c(1,col.norm);
+    pp <- (p+1);
+  } else {
+    Xb <- X;
+  }
+  sigma.hat <- (1/n)*(t(Xb)%*%Xb);
+  
+  if ((n>=2*p)){
+   tmp <- eigen(sigma.hat)
+   tmp <- min(tmp$values)/max(tmp$values)
+  }else{
+  tmp <- 0
+  }
+  M = solve(Sigma)
+  
+  unbiased.Lasso <- as.numeric(htheta + (M%*%t(Xb)%*%(y - Xb %*% htheta))/n);
+  A <- M %*% sigma.hat %*% t(M);
+  noise <- NoiseSd(unbiased.Lasso, A, n );
+  s.hat <- noise$sd;
+  
+  interval.sizes <- qnorm(1-(alpha/2))*s.hat*sqrt(diag(A))/(sqrt(n));
+
+  if  (is.null(lambda)){
+    lambda <- s.hat*sqrt(qnorm(1-(0.1/p))/n);
+  }
+  
+  addlength <- rep(0,pp);
+  MM <- M%*%sigma.hat - diag(pp);
+  for (i in 1:pp){
+    effectivemuvec <- sort(abs(MM[i,]),decreasing=TRUE);
+    effectivemuvec <- effectivemuvec[0:(noise$nz-1)];
+    addlength[i] <- sqrt(sum(effectivemuvec*effectivemuvec))*lambda;
+  }  
+ 
+  htheta <- htheta*col.norm;
+  unbiased.Lasso <- unbiased.Lasso*col.norm;
+  interval.sizes <- interval.sizes*col.norm;
+  addlength <- addlength*col.norm;
+
+  if (intercept==TRUE){
+    htheta <- htheta[2:pp];
+    unbiased.Lasso <- unbiased.Lasso[2:pp];
+    interval.sizes <- interval.sizes[2:pp];
+    addlength <- addlength[2:pp];
+  }  
+  p.vals <- 2*(1-pnorm(sqrt(n)*abs(unbiased.Lasso)/(s.hat*col.norm[(pp-p+1):pp]*sqrt(diag(A[(pp-p+1):pp,(pp-p+1):pp])))))
+  if(k > 1){
+    returnList <- list("beta_hat" = unbiased.Lasso[1:k],
+                     "cov_hat" = A[1:k, 1:k]/n,
+                      "add_length" = addlength[1:k]
+           )
+  }else{
+    returnList <- list("beta_hat" = unbiased.Lasso[1],
+                      "low.lim" = unbiased.Lasso[1] - interval.sizes[1] - addlength[1],
+                      "up.lim" = unbiased.Lasso[1] + interval.sizes[1] + addlength[1]
+           )
+  }            
+  
   return(returnList)
 }
