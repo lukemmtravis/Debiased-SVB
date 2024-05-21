@@ -1,0 +1,24 @@
+\begin{table}
+\centering
+\begin{tabular}{l|r|cccc}
+\toprule
+Scenario  $(n, p, s_0 , \beta_j^0 , \beta_k^0)$ & Method & Cov.  & MAE           & Length        & Time\\
+\midrule
+{\texttt riboflavin} $(i)$              & I-SVB  & 0.905 & 0.159 ± 0.127 & 0.614 ± 0.021 & 2.129 ± 0.275\\
+$(71 , 4088 , 5 , \log n , \log n )$ & MF     & 0.262 & 2.078 ± 0.931 & 0.463 ± 0.002 & 1.828 ± 0.422\\
+                                        & ZZ     & 0.971 & 0.422 ± 0.250 & 4.691 ± 1.465 & 0.656 ± 0.162\\
+                                        % & BR     & 0.098 & 2.778 ± 0.232 & 0.991 ± 0.000 & 0.013 ± 0.004\\
+                                        & JM & 0.300 & 2.430 ± 0.135 & 1.907 ± 0.103 & 22.573 ± 3.304\\
+                                        & Oracle & 0.944 & 0.125 ± 0.093 & 0.613 ± 0.000 & -\\
+\hline
+{\texttt riboflavin} $(ii)$             & I-SVB  & 0.857 & 0.196 ± 0.154 & 0.646 ± 0.022 & 3.209 ± 0.511\\
+$(71 , 4088 , 5, 0, \log n)$         & MF     & 0.976 & 0.042 ± 0.032 & 0.450 ± 0.005 & 4.884 ± 7.862\\
+                                        & ZZ     & 1.000 & 0.174 ± 0.131 & 4.664 ± 1.380 & 2.650 ± 4.094\\
+                                        & JM & 0.992 & 0.078 ± 0.033 & 1.408 ± 0.15 & 14.177 ± 2.483\\
+                                        % & BR     & 0.107 & 3.435 ± 0.235 & 0.991 ± 0.000 & 0.020 ± 0.013\\
+                                        & Oracle & 1.000 & 0.000 ± 0.000 & 0.000 ± 0.000 & -\\
+\bottomrule
+\end{tabular}
+\caption{Estimates of the coverage, MAE and length of the credible intervals produced using simulated data with the covariates from the {\texttt riboflavin} dataset.}
+\label{Tab:real_data}
+\end{table}

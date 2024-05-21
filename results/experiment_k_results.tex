@@ -1,0 +1,41 @@
+\begin{table}
+\centering
+\resizebox{\columnwidth}{!}{
+\begin{tabular}{r|r|cccc}
+\toprule
+Scenario   $(n, p, k, s_0, \beta^0_j, \rho)$  & Method & Cov.  & $L_2-$error            & Rel. Volume            & Time\\
+\hline
+$(i)$                                         & I-SVB  & 0.960 & \textbf{0.091 ± 0.048} & 1.007 ± 0.081          & 0.301 ± 0.107\\
+$(200, 400, 2, 10, \log n, 0)$                & MF     & 0.946 & \textbf{0.091 ± 0.048} & \textbf{0.951 ± 0.071} & 0.162 ± 0.080\\
+$\beta^0_{1:2} = (\log n, \log n)$            & JM     & 0.952 & 0.112 ± 0.065          & 1.843 ± 0.314          & 1.012 ± 0.163\\
+                                              & Oracle & 0.948 & 0.096 ± 0.065          & 1.000 ± 0.073          & - \\
+                                   \hline
+$(ii)$                                        & I-SVB  & 0.966 & 0.127 ± 0.065          & \textbf{1.517 ± 0.118} & 0.206 ± 0.040\\
+$(200, 400, 2, 10, \log n, 0.5)$              & MF     & 0.790 & \textbf{0.125 ± 0.064} & 0.532 ± 0.043          & 0.309 ± 0.071\\
+$\beta^0_{1:2} = (\log n, \log n)$            & JM     & 0.742 & 0.342 ± 0.527          & 2.975 ± 0.402          & 6.526 ± 0.902\\
+                                              & Oracle & 0.950 & 0.129 ± 0.068          & 1.000 ± 0.069          & -\\
+                                   \hline
+$(iii)$                                       & I-SVB  & 0.976 & 0.130 ± 0.046          & \textbf{1.397 ± 0.122} & 0.651 ± 0.106\\
+$(400, 800, 4, 10, \log n, 0.5)$              & MF     & 0.734 & \textbf{0.129 ± 0.046} & 0.305 ± 0.029          & 1.015 ± 1.652\\
+$\beta^0_{1:4} = (\log n, \dots, \log n)$     & JM     & 0.430 & 0.308 ± 0.328          & 4.194 ± 0.979          & 32.808 ± 7.427\\
+                                              & Oracle & 0.972 & 0.123 ± 0.047          & 1.000 ± 0.080          & -\\
+                                   \hline
+$(iv)$                                        & I-SVB  & 0.970 & \textbf{0.110 ± 0.040} & \textbf{1.000 ± 0.091} & 0.982 ± 0.119\\
+$(400, 800, 4, 10, \log n, 0.25)$             & MF     & 0.842 & 0.342 ± 1.115          & 0.394 ± 0.028          & 2.244 ± 0.423\\
+$\beta^0_{1:4} = (0, 0, \log n, \log n)$      & JM     & 0.500 & 0.498 ± 0.535          & 8.727 ± 9.590          & 31.551 ± 2.089\\
+                                              & Oracle & 0.990 & 0.072 ± 0.038          & 0.000 ± 0.000          & -\\
+                                   \hline
+$(v)$                                         & I-SVB  & 0.966 & \textbf{0.163 ± 0.052} & \textbf{1.325 ± 0.177} & 1.591 ± 17.545\\
+$(400, 1000, 6, 12, \log n, 0.5)$             & MF     & 0.616 & 0.246 ± 0.859          & 0.157 ± 0.016          & 7.984 ± 63.167\\
+$\beta^0_{1:6} = (\log n, \dots, \log n)$     & JM     & 0.144 & 0.474 ± 0.551          & 7.304 ± 1.964          & 32.330 ± 2.805\\
+                                              & Oracle & 0.936 & 0.166 ± 0.054          & 1.000 ± 0.088          & -\\
+                                    \hline
+$(vi)$                                        & I-SVB  & 0.950 & 0.366 ± 0.111          & \textbf{1.000 ± 0.157}          & 0.868 ± 0.148\\
+$(400, 1000, 6, 12, \mathcal{U}(-5, 5), 0.9)$ & MF     & 0.576 & 0.175 ± 0.136          & 0.001 ± 0.000          & 0.531 ± 0.196\\
+$\beta^0_{1:6} = (0, \dots, 0)$               & JM     & 0.180 & \textbf{0.148 ± 0.090}          & 265.69 ± 5538.8        & 29.079 ± 11.735\\
+                                              & Oracle & - & -          & -          & -\\
+\bottomrule
+\end{tabular}}
+\caption{Estimation and uncertainty quantification performance for $\beta_{1:k}$ using 3 methods and the Oracle approach. Highlighted in bold are the smallest relative volume (compared to the Oracle) of the sets, subject to coverage being larger than 0.85, and the smallest mean $L_2$-error. We do not highlight the Oracle since it is \textit{not} a valid method as it depends on the unknown truth, while in (iv) it reduces to the point estimate at 0, hence we omit it.}
+\label{Tab:results_multi_d}
+\end{table}
