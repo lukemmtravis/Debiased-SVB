@@ -12,7 +12,7 @@ library(mcreplicate)
 
 library(sparsevb)
 # library(sparsevb2) Must install this and load sparsevb2 if want to use mf2.fit.
-source('lasso_inference.r')
+source('external_packages/lasso_inference.r')
 
 #### Data Generation Functions ####
 
@@ -125,7 +125,7 @@ make_data = function(n, p, s0, noise_var=1, noise = 'gaussian',
 										 rescale_first_column=FALSE, AR=AR)	
 		beta_0 = make_beta(p, s0, k, beta_0_1=beta_0_1, signal_size=signal_size, signal_scheme=signal_scheme, randomized_coords=randomized_coords)
 	}else if(dataset=='riboflavin'){
-		X = as.matrix(read.csv('riboflavin_normalized.csv'))
+		X = as.matrix(read.csv('data/riboflavin_normalized.csv'))
 		n = dim(X)[1]
 		p = dim(X)[2]
 		# reorder columns so that index is first.
