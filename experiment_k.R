@@ -1,9 +1,9 @@
 rm(list=ls())
-setwd("/Users/lmt15/Documents/phd/Variational Inference/paper_codes")
+setwd("/path/to/SVB.R")
 source('SVB.R')
 library(kableExtra)
 
-CORES = 5
+CORES = 1
 
 # Initialise parameters for experiment and combine into list
 param_set_1 = list(n = 200, p = 400, k = 2,
@@ -38,7 +38,7 @@ fits = list(isvb = isvb.fit,
             oracle=oracle.fit)
 
 # Define number of replicates that should be used for estimation
-n_replicates = 5
+n_replicates = 500
 
 t1 = Sys.time()
 results = lapply(param_list, function(par) estimate_stats(n=par$n,
