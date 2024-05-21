@@ -64,10 +64,14 @@ empirical_covariance = function(samples){
 
 
 #### Experiment Functions ####
-make_beta = function(p, s0, k = 1, beta_0_1 = NA, signal_size = NA, signal_scheme='normal'){
+make_beta = function(p, s0, k = 1, beta_0_1 = NA, signal_size = NA, signal_scheme='normal', randomized_coords=TRUE){
 	# Produce beta_0 with given structure
     beta_0 = rep(0,p)
-    S_0 = c(1:k, sample(c((k+1):p), s0-k))
+    if(randomized_coords){
+    	S_0 = c(1:k, sample(c((k+1):p), s0-k))	
+    }else{
+    	S_0 = c(1:s0)
+    }
     if(is.na(signal_size)){
     	if(signal_scheme == 'normal'){
     		beta_0[S_0] = rnorm(s0)  
@@ -114,20 +118,20 @@ make_X = function(n, p,
 make_data = function(n, p, s0, noise_var=1, noise = 'gaussian',
 					 beta_0_1 = NA, signal_size = NA, signal_scheme = 'normal',
 					 feature_correlation = 0, block_size = NA, rescale_first_column = FALSE, AR = FALSE,
-					 k = 1, dataset = 'generated', index=1){
+					 k = 1, dataset = 'generated', index=1, randomized_coords=TRUE){
 	# Produce X, Y and beta_0 with given structure for simulations.
 
 	# make design
 	if(dataset=='generated'){
 		X = make_X(n, p, feature_correlation=feature_correlation, block_size=block_size,
 										 rescale_first_column=FALSE, AR=AR)	
-		beta_0 = make_beta(p, s0, k, beta_0_1=beta_0_1, signal_size=signal_size, signal_scheme=signal_scheme)
+		beta_0 = make_beta(p, s0, k, beta_0_1=beta_0_1, signal_size=signal_size, signal_scheme=signal_scheme, randomized_coords=randomized_coords)
 	}else if(dataset=='riboflavin'){
 		X = as.matrix(read.csv('riboflavin_normalized.csv'))
-		# reorder columns so that index is first.
-		X = X[,c(index, c(1:p)[-index])]
 		n = dim(X)[1]
 		p = dim(X)[2]
+		# reorder columns so that index is first.
+		X = X[,c(index, c(1:p)[-index])]
 		beta_0 = rep(0,p)
     if(is.na(signal_size)){
     	if(signal_scheme == 'normal'){
@@ -237,8 +241,8 @@ isvb.fit = function(X, Y, n_samples = 1000, lambda = NA, k = 1){
 	    			fit_time=as.numeric(difftime(t_2, t_1, units = 'secs'))))	
 	}else{
 		A_k = X[,1:k]
-    	L = chol(t(A_k)%*% A_k)
-    	H = A_k %*% solve(t(A_k)%*%A_k, t(A_k))
+  	L = chol(t(A_k)%*% A_k)
+  	H = A_k %*% solve(t(A_k)%*%A_k, t(A_k))
 		I_minus_H = diag(rep(1,n)) - H
 		#make the matrix P, consisting of basis vectors of span(X1)^perp
 		svd_temp = svd(I_minus_H)
@@ -276,10 +280,14 @@ isvb.fit = function(X, Y, n_samples = 1000, lambda = NA, k = 1){
 
 		beta_hat = apply(beta_k_samples, 2, mean)
 		cov_hat = empirical_covariance(beta_k_samples)
-		# cov_hat = Sigma_p + Gamma_mat %*% diag(sigmas_hat**2) %*% t(Gamma_mat)/n_samples
+		cov_hat_beta_star = Sigma_p 
+		cov_hat_diffs = Gamma_mat %*% diag(sigmas_hat**2 * gammas_hat**2) %*% t(Gamma_mat)
+
 		t_2 = Sys.time()
 		return(list(beta_hat=beta_hat,
 					cov_hat=cov_hat,
+					cov_hat_beta_star = cov_hat_beta_star,
+					cov_hat_nuisance = cov_hat_diffs,
 					fit_time=as.numeric(difftime(t_2, t_1, units = 'secs'))))
 	}
 	
@@ -847,6 +855,36 @@ freq.fit = function(X, Y, k = 1){
 	
 }
 
+oracle.theoretical.length = function(X, Y, S0, k=1, rho=0, AR=FALSE){
+	n = dim(X)[1]
+	p = dim(X)[2]
+	s0 = length(S0)
+	if(AR){
+		theoretical_var = 1/((1-rho**2)*n)
+	}else{
+		theoretical_var = (1/(1-rho)) * (1 - 2*rho + rho*s0)/(1-rho + rho*s0) / n 
+	}
+	theoretical_length = 2*qnorm(0.975)*sqrt(theoretical_var)
+	return(list(beta_hat = rep(0, k), 
+	  						CI = c(0, theoretical_length),
+	  						fit_time=as.numeric(0)))	
+}
+
+isvb.theoretical.length = function(X, Y, S0, k=1, rho=0, AR=FALSE){
+	n = dim(X)[1]
+	p = dim(X)[2]
+	s0 = length(S0)
+	if(AR){
+		theoretical_var = (1/n) * (1-rho**(2*s0))/(1-rho**2)
+	}else{
+		theoretical_var = (1+rho**2 *(s0 - 1) )/ n
+	}
+	theoretical_length = 2*qnorm(0.975)*sqrt(theoretical_var)
+	return(list(beta_hat = rep(0, k), 
+	  						CI = c(0, theoretical_length),
+	  						fit_time=as.numeric(0)))
+}
+
 oracle.fit = function(X, Y, S0, k = 1){
 	if(k == 1){
 		gamma=0.95
@@ -1025,10 +1063,18 @@ cov.adj = function(mat, add_length, chi_zval){
   return(adj_mat)
 }
 
-compute_level_sets = function(fit, name){
+compute_level_sets = function(cent=NA, mat=NA, name, fit = NA){
   #only works for k = 2
-  cent = fit$beta_hat
-  mat = fit$cov_hat
+  if(!any(is.na(fit))){
+  	cent = fit$beta_hat
+  	mat = fit$cov_hat	
+  }else{
+  	if( any(is.na(cent)) || any(is.na(mat))){
+  		stop('Must supply a centering and a matrix or a fit with the quantities.')
+  	}
+  	cent=cent
+  	mat=mat
+  }
   if('add_length' %in% names(fit)){
   	addLength=TRUE
   	add_length = fit$add_length
@@ -1077,7 +1123,7 @@ compute_level_sets = function(fit, name){
 sample_fits = function(n, p, s0, noise_var=1, noise='gaussian',
 					   fits = list(isvb=isvb.fit, zz=zz.fit, jm=jm.fit),
 					   beta_0_1 = NA, signal_size = NA, signal_scheme = 'normal',
-					   feature_correlation = 0, block_size = NA, rescale_first_column = FALSE, AR = FALSE,
+					   feature_correlation = 0, block_size = NA, rescale_first_column = FALSE, AR = FALSE, randomized_coords=TRUE,
 					   k=1,
 					   dataset='generated', index=1){
 	'
@@ -1089,7 +1135,7 @@ sample_fits = function(n, p, s0, noise_var=1, noise='gaussian',
 	dat = make_data(n, p, s0, noise_var, noise=noise,
 					beta_0_1=beta_0_1, signal_size=signal_size, signal_scheme=signal_scheme,
 					feature_correlation=feature_correlation, block_size=block_size, rescale_first_column=rescale_first_column, AR=AR,
-					k=k, dataset=dataset, index=index)
+					k=k, dataset=dataset, index=index, randomized_coords=randomized_coords)
 	X = dat$X
 	Y = dat$Y
 	beta_0 = dat$beta_0	
@@ -1116,6 +1162,15 @@ sample_fits = function(n, p, s0, noise_var=1, noise='gaussian',
 		Sigma = make_Sigma(p=p, rho=feature_correlation, block_size=block_size)
 		fits[['jm18']] = function(x, y, k) jm18.fit(x, y, Sigma, k=k)	
 	}
+	if('oracle.theoretical.len' %in% names(fits)){
+		S0 = which(beta_0!=0)
+		fits[['oracle.theoretical.len']] = function(x, y, k) oracle.theoretical.length(x, y, S0=S0, k=k, rho=feature_correlation, AR=AR)
+	}
+	if('isvb.theoretical.len' %in% names(fits)){
+		S0 = which(beta_0!=0)
+		fits[['isvb.theoretical.len']] = function(x, y, k) isvb.theoretical.length(x, y, S0=S0, k=k, rho=feature_correlation, AR=AR)
+	}
+
 
   fitted = lapply(fits, function(fn) fn(X_scaled, Y_scaled, k=k))	
   
@@ -1138,7 +1193,7 @@ sample_fits = function(n, p, s0, noise_var=1, noise='gaussian',
 estimate_stats = function(n, p, s0, beta_0_1, noise_var=1, noise='gaussian',
 					   fits = list(isvb=isvb.fit, zz=zz.fit, jm=jm.fit),
 					   signal_size = NA, signal_scheme = 'normal',
-					   feature_correlation = 0, block_size = NA, rescale_first_column = FALSE, AR = FALSE,
+					   feature_correlation = 0, block_size = NA, rescale_first_column = FALSE, AR = FALSE, randomized_coords=TRUE,
 					   n_replicates = 100, mc.cores = 1,
 					   k = 1, dataset = 'generated', index = 1, override_core_warning=FALSE){
 	'
@@ -1164,7 +1219,7 @@ estimate_stats = function(n, p, s0, beta_0_1, noise_var=1, noise='gaussian',
 	reps = mc_replicate(n_replicates,
 	 sample_fits(n, p, s0, noise_var, noise,
 					   fits, beta_0_1, signal_size, signal_scheme,
-					   feature_correlation, block_size, rescale_first_column, AR, k, dataset, index),
+					   feature_correlation, block_size, rescale_first_column, AR, randomized_coords, k, dataset, index),
 	 mc.cores=mc.cores
 	 )
 	print('Finished replicates.')
