@@ -9,3 +9,5 @@ This repo contains functions to fit the methods explored in our paper.
 * `experiment.R` contains an example of how to run our experiments.
 
 * `set_plots.R` contains an example of how to plot the 2-dimensional credible regions.
+
+* `example.R' contains an example of how to make simulated data and fit various methods to it.
