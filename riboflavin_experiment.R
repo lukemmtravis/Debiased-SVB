@@ -22,7 +22,7 @@ param_list = indexed_params
 lambda_hat=sqrt(71*log(4088)/6)
 
 fits = list(
-            isvb = function(X, Y, k) isvb.fit(X, Y, lambda=lambda_hat, k=k)
+            isvb = function(X, Y, k) isvb.fit(X, Y, lambda=lambda_hat, k=k),
             mf = mf.fit,
             zz = zz.fit,
             # br = br23.fit,
