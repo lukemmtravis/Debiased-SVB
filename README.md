@@ -1,7 +1,7 @@
 ## Debiased SVB ##
 This repo contains functions to fit the methods explored in our paper.
 
-* If one has not used the `sparsevb` package before, install it using the following command `install.packages('sparsevb_0.1.0.tar.gz', repos = NULL, type="source")`.
+* If one has not used the `sparsevb` package before, install it using the following command `install.packages('external_packages/sparsevb_0.1.0.tar.gz', repos = NULL, type="source")`.
 
 * The main bulk of the functions are in `SVB.R`, and can be fitted to an $n \times p$ matrix $X$ accompanied by an $n-$ vector Y. For example,
 
