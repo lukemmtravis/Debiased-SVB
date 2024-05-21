@@ -62,8 +62,6 @@ empirical_covariance = function(samples){
   return(sigma_hat)
 }
 
-
-#### Experiment Functions ####
 make_beta = function(p, s0, k = 1, beta_0_1 = NA, signal_size = NA, signal_scheme='normal', randomized_coords=TRUE){
 	# Produce beta_0 with given structure
     beta_0 = rep(0,p)
@@ -661,8 +659,7 @@ jm.fit = function(X, Y, k = 1){
 }
 
 jm18.fit = function(X, Y, Sigma, k = 1){
-	# Fit JM method using their code. Note, also returns a vector add_length which quantifies 
-	# additional uncertainty about the centering.
+	# Fit JM18 method, thought note this requires known Sigma.
 	n = dim(X)[1]
 	p = dim(X)[2]
 	if(k == 1){
@@ -789,7 +786,7 @@ br23.fit = function(X, Y, k = 1, delta = 1){
 }
 
 freq.fit = function(X, Y, k = 1){
-	# Fit the I-SVB method on the first k coordinates.
+	# A frequentist estimator - analagous to our Bayesian method
 	t_1 = Sys.time()
 	n = dim(X)[1]
 	p = dim(X)[2]
@@ -851,11 +848,11 @@ freq.fit = function(X, Y, k = 1){
 		return(list(beta_hat=beta_hat,
 					cov_hat=cov_hat,
 					fit_time=as.numeric(difftime(t_2, t_1, units = 'secs'))))
-	}
-	
+	}	
 }
 
 oracle.theoretical.length = function(X, Y, S0, k=1, rho=0, AR=FALSE){
+	# Compute the theoretical length of the oracle.
 	n = dim(X)[1]
 	p = dim(X)[2]
 	s0 = length(S0)
@@ -871,6 +868,7 @@ oracle.theoretical.length = function(X, Y, S0, k=1, rho=0, AR=FALSE){
 }
 
 isvb.theoretical.length = function(X, Y, S0, k=1, rho=0, AR=FALSE){
+	# Compute the theoretical length we computed for the I-SVB method
 	n = dim(X)[1]
 	p = dim(X)[2]
 	s0 = length(S0)
@@ -886,6 +884,7 @@ isvb.theoretical.length = function(X, Y, S0, k=1, rho=0, AR=FALSE){
 }
 
 oracle.fit = function(X, Y, S0, k = 1){
+	# Compute the oracle.
 	if(k == 1){
 		gamma=0.95
 		t_1 = Sys.time()
@@ -933,6 +932,7 @@ oracle.fit = function(X, Y, S0, k = 1){
 }
 
 oracle.fit.cond = function(X, Y, S0, cond_on = NA, k = 1){
+	
 	if(length(S0) == k){
 		return(oracle.fit(X, Y, S0, k))
 	}
@@ -1039,6 +1039,7 @@ volume = function(fit){
 #### Utility Functions ####
 
 cov.adj = function(mat, add_length, chi_zval){
+  # Adjust covariance matrix with an add_length - required for JM method.
   svd_mat = svd(mat)
   evals = svd_mat$d
   V = svd_mat$u
@@ -1115,7 +1116,6 @@ compute_level_sets = function(cent=NA, mat=NA, name, fit = NA){
     levels['Method'] = name
     return(levels)
   }
-  
 }
 
 #### Experiment Functions ####
