@@ -11,7 +11,7 @@ library(pbapply)
 library(mcreplicate)
 
 library(sparsevb)
-library(sparsevb2)
+# library(sparsevb2) Must install this and load sparsevb2 if want to use mf2.fit.
 source('lasso_inference.r')
 
 #### Data Generation Functions ####
@@ -556,9 +556,9 @@ mf.fit = function(X, Y, n_samples = 1000, lambda = NA, k = 1){
 	    			fit_time=as.numeric(difftime(t_2, t_1, units = 'secs'))))
     }else{
     	if(is.na(lambda)){
-        	vbL<-sparsevb2::svb.fit(X,Y,tol = 10e-5, max_iter = 10^4, family ="linear")  
+        	vbL<-sparsevb::svb.fit(X,Y,tol = 10e-5, max_iter = 10^4, family ="linear")  
       	}else{
-        	vbL<- sparsevb2::svb.fit(X,Y,tol = 10e-5, max_iter = 10^4, family ="linear",
+        	vbL<- sparsevb::svb.fit(X,Y,tol = 10e-5, max_iter = 10^4, family ="linear",
                                  lambda = lambda)
       	}
 		#extract relevant params from the fit
@@ -579,31 +579,31 @@ mf.fit = function(X, Y, n_samples = 1000, lambda = NA, k = 1){
 	}
 }
 
-mf2.fit = function(X, Y, n_samples = 1000, lambda = NA){
-	# Fit the mean field method, but with a slab (no spike) on the first coordinate.
-	n = dim(X)[1]
-	p = dim(X)[2]
-	t_1 = Sys.time()   
-	if(is.na(lambda)){
-		vbL<-sparsevb2::svb.fit(X,Y,tol = 10e-5, max_iter = 10^4, family ="linear")  
-	}else{
-		vbL<- sparsevb2::svb.fit(X,Y,tol = 10e-5, max_iter = 10^4, family ="linear",
-	                         lambda = lambda)
-	}
+# mf2.fit = function(X, Y, n_samples = 1000, lambda = NA){
+# 	# Fit the mean field method, but with a slab (no spike) on the first coordinate.
+# 	n = dim(X)[1]
+# 	p = dim(X)[2]
+# 	t_1 = Sys.time()   
+# 	if(is.na(lambda)){
+# 		vbL<-sparsevb2::svb.fit(X,Y,tol = 10e-5, max_iter = 10^4, family ="linear")  
+# 	}else{
+# 		vbL<- sparsevb2::svb.fit(X,Y,tol = 10e-5, max_iter = 10^4, family ="linear",
+# 	                         lambda = lambda)
+# 	}
 
-	#extract relevant params from the fit
-	mu_hat = vbL$mu
-	sigmas_hat = abs(vbL$sigma)
-	gammas_hat = vbL$gamma
+# 	#extract relevant params from the fit
+# 	mu_hat = vbL$mu
+# 	sigmas_hat = abs(vbL$sigma)
+# 	gammas_hat = vbL$gamma
 
-	beta_hat = mu_hat[1]*gammas_hat[1]
-	credible_interval = beta_hat + c(qnorm(0.025, mean = 0, sd = sigmas_hat[1]),
-	                                        qnorm(0.975, mean = 0, sd = sigmas_hat[1]))
-    t_2 = Sys.time()
-    return(list(beta_hat=beta_hat,
-    			CI=as.numeric(credible_interval),
-    			fit_time=as.numeric(difftime(t_2, t_1, units = 'secs'))))
-}
+# 	beta_hat = mu_hat[1]*gammas_hat[1]
+# 	credible_interval = beta_hat + c(qnorm(0.025, mean = 0, sd = sigmas_hat[1]),
+# 	                                        qnorm(0.975, mean = 0, sd = sigmas_hat[1]))
+#     t_2 = Sys.time()
+#     return(list(beta_hat=beta_hat,
+#     			CI=as.numeric(credible_interval),
+#     			fit_time=as.numeric(difftime(t_2, t_1, units = 'secs'))))
+# }
 
 zz.fit = function(X, Y, k = 1){
 	# Fit the ZZ method
