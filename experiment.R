@@ -1,13 +1,13 @@
 rm(list=ls())
 
 # Specify working directory (where SVB.R is)#
-setwd("/Users/lmt15/Documents/phd/Variational Inference/paper_codes")
+setwd("/path/to/SVB.R")
 source('SVB.R')
 library(kableExtra)
 
 # Specify the number of cores you wish to use here
 # If you need to debug, it is best to set this to 1.
-CORES = 6
+CORES = 1
 
 
 # Initialise parameters for experiment and combine into list.
@@ -58,7 +58,7 @@ fits = list(isvb = isvb.fit,
 # Define number of replicates that should be used for estimation
 # Try a small number first to check everything works as expected, but set to 500
 # to match what we do in the paper
-n_replicates = 100
+n_replicates = 500
 
 t1 = Sys.time()
 # Estimation Function, if you add extra parameters to the param_sets above,
