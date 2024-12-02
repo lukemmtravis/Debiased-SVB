@@ -1,5 +1,6 @@
 rm(list=ls())
-setwd("path/to/directory/containing/SVB.R")
+# setwd("path/to/directory/containing/SVB.R")
+setwd("/Users/lmt15/Documents/phd/Variational Inference/paper_codes")
 source('SVB.R')
 library(latex2exp)
 
